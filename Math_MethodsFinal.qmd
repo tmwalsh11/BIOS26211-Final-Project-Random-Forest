@@ -1,0 +1,424 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+## Math Methods II Final
+
+```{r, echo=FALSE}
+# Loading relevant libraries 
+library(tidyverse) # includes ggplot2, for data visualisation. dplyr, for data manipulation.
+library(RColorBrewer) # for a colourful plot
+library(ggrepel) # for nice annotations
+library(DESeq2)
+library(readxl)
+```
+
+## Before Health vs Obese 
+
+```{r, echo=FALSE}
+df <- read_excel('Monday_ALL_combined.xlsx')
+df <- df |>
+  drop_na() |>
+  dplyr::select(`Gene`,`001_V2`,`010_V2`,`015_V2`,`017_V2`,`024_V2`,`028_V2`,`034_V2`,
+                `040_V2`,`042_V2`,`043_V2`,`052_V2`,`054_V2`,`063_V2`,`070_V2`,`072_V2`,
+                `078_V2`,`085_V2`,`092_V2`,`099_V2`,`100_V2`)
+
+norm_obese_df <- df[, -1]
+# Convert the tibble to a regular data frame
+norm_obese_df <- as.data.frame(norm_obese_df)
+
+# Ensure the counts are integers (round if necessary)
+norm_obese_df <- as.data.frame(apply(norm_obese_df, 2, as.integer))
+
+# Define sample groups (e.g., "control" and "treated")
+condition <- c("healthy", "healthy", "healthy", "healthy", "healthy", "healthy", "healthy", 
+               "healthy", "healthy", "healthy", "obese", "obese", "obese", "obese", "obese",
+               "obese", "obese", "obese", "obese", "obese")
+
+# Ensure this matches the order of columns in your counts dataframe
+colData <- data.frame(condition = factor(condition), row.names = colnames(norm_obese_df))
+
+dds <- DESeqDataSetFromMatrix(countData = norm_obese_df,
+                              colData = colData,
+                              design = ~ condition)  # The experimental design formula
+
+dds <- DESeq(dds)
+res <- results(dds)
+# Ensure the results have the same row names as the counts data
+res_df <- as.data.frame(res)
+
+# Add p-values, p-adjusted values, and log2 fold changes to the counts_df
+norm_obese_df$log2FoldChange <- res_df$log2FoldChange
+norm_obese_df$pvalue <- res_df$pvalue
+norm_obese_df$padj <- p.adjust(norm_obese_df$pvalue, method = "hochberg")
+# Assuming df had the gene column in the first column
+norm_obese_df$gene <- df$Gene  # Add the gene column back to counts_df
+
+# Add a column to the data frame to specify if they are UP- or DOWN- regulated (log2fc respectively positive or negative)<br /><br /><br />
+norm_obese_df$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP"<br /><br /><br />
+norm_obese_df$diffexpressed[norm_obese_df$log2FoldChange > 1 & norm_obese_df$padj < 0.05] <- "UP"
+# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"<br /><br /><br />
+norm_obese_df$diffexpressed[norm_obese_df$log2FoldChange < -1 & norm_obese_df$padj < 0.05] <- "DOWN"
+# Explore a bit<br /><br /><br />
+```
+
+```{r, echo=FALSE}
+ggplot(data = norm_obese_df, aes(x = log2FoldChange, y = -log10(padj), col = diffexpressed)) +
+  geom_vline(xintercept = c(-1, 1), col = "gray", linetype = 'dashed') +
+  geom_hline(yintercept = -log10(0.05), col = "gray", linetype = 'dashed') +
+  geom_point() +
+  scale_color_manual(values = c("#00AFBB", "grey", "#bb0c00"),
+                     labels = c("Downregulated", "Not significant", "Upregulated")) +
+  coord_cartesian(ylim = c(0, 17), xlim = c(-4, 13)) + 
+  labs(color = 'DEG', 
+       x = expression("log"[2]*"FC"), y = expression("-log"[10]*"p-value (adjusted)")) + 
+  scale_x_continuous(breaks = seq(-10, 14, 2)) + 
+  ggtitle('mRNA profiles in Healthy vs Obese Participants at Week 0') +
+  theme_classic()
+
+# Filter for genes that meet both log2FoldChange and padj thresholds
+significant_genes <- norm_obese_df %>%
+  filter(abs(log2FoldChange) > 1 & padj < 0.05)
+
+# Now select the top 9 significant genes based on p-value
+top_genes <- significant_genes %>%
+  arrange(padj) %>%
+  slice_head(n = 10) %>%
+  dplyr::select(gene, diffexpressed)  # Keep more columns for clarity
+
+# Print the top significant genes
+print(top_genes)
+
+# Count the number of significant genes
+n_significant_genes <- nrow(significant_genes)
+print(paste("Number of significant genes:", n_significant_genes))
+```
+
+## After Normal Fish vs After Obese Fish
+
+```{r, echo=FALSE}
+df <- read_excel('Monday_ALL_combined.xlsx')
+df <- df |>
+  drop_na() |>
+  dplyr::select(`Gene`,`001_V4`,`017_V4`,`024_V4`,`034_V4`,`043_V4`,`052_V4`,`054_V4`,
+                `070_V4`,`099_V4`,`100_V4`)
+
+norm_obese_df <- df[, -1]
+# Convert the tibble to a regular data frame
+norm_obese_df <- as.data.frame(norm_obese_df)
+
+# Ensure the counts are integers (round if necessary)
+norm_obese_df <- as.data.frame(apply(norm_obese_df, 2, as.integer))
+
+# Define sample groups (e.g., "control" and "treated")
+condition <- c("healthy", "healthy", "healthy", "healthy", "healthy", "obese", "obese", "obese", "obese", "obese")
+
+# Ensure this matches the order of columns in your counts dataframe
+colData <- data.frame(condition = factor(condition), row.names = colnames(norm_obese_df))
+
+dds <- DESeqDataSetFromMatrix(countData = norm_obese_df,
+                              colData = colData,
+                              design = ~ condition)  # The experimental design formula
+
+dds <- DESeq(dds)
+res <- results(dds)
+# Ensure the results have the same row names as the counts data
+res_df <- as.data.frame(res)
+
+# Add p-values, p-adjusted values, and log2 fold changes to the counts_df
+norm_obese_df$log2FoldChange <- res_df$log2FoldChange
+norm_obese_df$pvalue <- res_df$pvalue
+norm_obese_df$padj <- res_df$padj
+# Assuming df had the gene column in the first column
+norm_obese_df$gene <- df$Gene  # Add the gene column back to counts_df
+
+# Add a column to the data frame to specify if they are UP- or DOWN- regulated (log2fc respectively positive or negative)<br /><br /><br />
+norm_obese_df$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP"<br /><br /><br />
+norm_obese_df$diffexpressed[norm_obese_df$log2FoldChange > 1 & norm_obese_df$padj < 0.05] <- "UP"
+# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"<br /><br /><br />
+norm_obese_df$diffexpressed[norm_obese_df$log2FoldChange < -1 & norm_obese_df$padj < 0.05] <- "DOWN"
+# Explore a bit<br /><br /><br />
+
+# Create a new column "delabel" to de, that will contain the name of the top 30 differentially expressed genes (NA in case they are not)
+norm_obese_df$delabel <- ifelse(norm_obese_df$gene %in% 
+                         head(norm_obese_df[order(norm_obese_df$padj), "gene"], 30), 
+                         norm_obese_df$gene, NA)
+```
+
+```{r, echo=FALSE}
+ggplot(data = norm_obese_df, aes(x = log2FoldChange, y = -log10(padj), col = diffexpressed)) +
+  geom_vline(xintercept = c(-1,1), col = "gray", linetype = 'dashed') +
+  geom_hline(yintercept = -log10(0.05), col = "gray", linetype = 'dashed') +
+  geom_point() +
+  scale_color_manual(values = c("#00AFBB", "grey", "#bb0c00"),
+                     labels = c("Downregulated", "Not significant", "Upregulated")) +
+  coord_cartesian(ylim = c(0, 8), xlim = c(-4, 9)) + 
+  labs(color = 'DEG', 
+       x = expression("log"[2]*"FC"), y = expression("-log"[10]*"p-value (adjusted)")) + 
+  scale_x_continuous(breaks = seq(-10, 14, 2)) + 
+  ggtitle('mRNA profiles in Healthy vs Obese Fish Oil Participants at Week 12') +
+  theme_classic()
+
+# Filter for genes that meet both log2FoldChange and padj thresholds
+significant_genes <- norm_obese_df %>%
+  filter(abs(log2FoldChange) > 1 & padj < 0.05)
+
+# Now select the top 9 significant genes based on p-value
+top_genes <- significant_genes %>%
+  arrange(padj) %>%
+  slice_head(n = 10) %>%
+  dplyr::select(gene, diffexpressed)  # Keep more columns for clarity
+
+# Print the top significant genes
+print(top_genes)
+
+# Count the number of significant genes
+n_significant_genes <- nrow(significant_genes)
+print(paste("Number of significant genes:", n_significant_genes))
+```
+
+## Before Obese Fish vs After Obese Fish
+
+```{r, echo=FALSE}
+df <- read_excel('Monday_ALL_combined.xlsx')
+df <- df |>
+  drop_na() |>
+  dplyr::select(`Gene`,`052_V2`,`054_V2`,`070_V2`,`099_V2`,`100_V2`,`052_V4`,`054_V4`,
+                `070_V4`,`099_V4`,`100_V4`)
+
+norm_obese_df <- df[, -1]
+# Convert the tibble to a regular data frame
+norm_obese_df <- as.data.frame(norm_obese_df)
+
+# Ensure the counts are integers (round if necessary)
+norm_obese_df <- as.data.frame(apply(norm_obese_df, 2, as.integer))
+
+# Define sample groups (e.g., "control" and "treated")
+condition <- c("before", "before", "before", "before", "before", "after", "after", "after",
+               "after", "after")
+
+# Ensure this matches the order of columns in your counts dataframe
+colData <- data.frame(condition = factor(condition), row.names = colnames(norm_obese_df))
+
+dds <- DESeqDataSetFromMatrix(countData = norm_obese_df,
+                              colData = colData,
+                              design = ~ condition)  # The experimental design formula
+
+dds <- DESeq(dds)
+res <- results(dds)
+# Ensure the results have the same row names as the counts data
+res_df <- as.data.frame(res)
+
+# Add p-values, p-adjusted values, and log2 fold changes to the counts_df
+norm_obese_df$log2FoldChange <- res_df$log2FoldChange
+norm_obese_df$pvalue <- res_df$pvalue
+norm_obese_df$padj <- res_df$padj
+# Assuming df had the gene column in the first column
+norm_obese_df$gene <- df$Gene  # Add the gene column back to counts_df
+
+# Add a column to the data frame to specify if they are UP- or DOWN- regulated (log2fc respectively positive or negative)<br /><br /><br />
+norm_obese_df$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP"<br /><br /><br />
+norm_obese_df$diffexpressed[norm_obese_df$log2FoldChange > 0.58 & norm_obese_df$pvalue < 0.05] <- "UP"
+# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"<br /><br /><br />
+norm_obese_df$diffexpressed[norm_obese_df$log2FoldChange < -0.58 & norm_obese_df$pvalue < 0.05] <- "DOWN"
+# Explore a bit<br /><br /><br />
+```
+
+```{r, echo=FALSE}
+ggplot(data = norm_obese_df, aes(x = log2FoldChange, y = -log10(pvalue), col = diffexpressed)) +
+  geom_vline(xintercept = c(-0.58, 0.58), col = "gray", linetype = 'dashed') +
+  geom_hline(yintercept = -log10(0.05), col = "gray", linetype = 'dashed') +
+  geom_point() +
+  scale_color_manual(values = c("#00AFBB", "grey", "#bb0c00"),
+                     labels = c("Downregulated", "Not significant", "Upregulated")) +
+  coord_cartesian(ylim = c(0, 3), xlim = c(-4, 4)) + 
+  labs(color = 'DEG', 
+       x = expression("log"[2]*"FC"), y = expression("-log"[10]*"p-value (unadjusted)")) + 
+  scale_x_continuous(breaks = seq(-10, 14, 2)) + 
+  ggtitle('mRNA profiles in Obese Fish Oil Participants at Week 0 and Week 12') +
+  theme_classic()
+
+# Filter for genes that meet both log2FoldChange and padj thresholds
+significant_genes <- norm_obese_df %>%
+  filter(abs(log2FoldChange) > 0.58 & pvalue < 0.05)
+
+# Now select the top 9 significant genes based on p-value
+top_genes <- significant_genes %>%
+  arrange(pvalue) %>%
+  slice_head(n = 9) %>%
+  dplyr::select(gene, diffexpressed)  # Keep more columns for clarity
+
+# Print the top significant genes
+print(top_genes)
+
+# Count the number of significant genes
+n_significant_genes <- nrow(significant_genes)
+print(paste("Number of significant genes:", n_significant_genes))
+```
+
+## Before Normal Fish vs After Normal Fish
+
+```{r, echo=FALSE}
+df <- read_excel('Monday_ALL_combined.xlsx')
+df <- df |>
+  drop_na() |>
+  dplyr::select(`Gene`,`001_V2`,`017_V2`,`024_V2`,`034_V2`,`043_V2`,`001_V4`,`017_V4`,
+                `024_V4`,`034_V4`,`043_V4`)
+
+norm_obese_df <- df[, -1]
+# Convert the tibble to a regular data frame
+norm_obese_df <- as.data.frame(norm_obese_df)
+
+# Ensure the counts are integers (round if necessary)
+norm_obese_df <- as.data.frame(apply(norm_obese_df, 2, as.integer))
+
+# Define sample groups (e.g., "control" and "treated")
+condition <- c("before", "before", "before", "before", "before", "after", "after", "after",
+               "after", "after")
+
+# Ensure this matches the order of columns in your counts dataframe
+colData <- data.frame(condition = factor(condition), row.names = colnames(norm_obese_df))
+
+dds <- DESeqDataSetFromMatrix(countData = norm_obese_df,
+                              colData = colData,
+                              design = ~ condition)  # The experimental design formula
+
+dds <- DESeq(dds)
+res <- results(dds)
+# Ensure the results have the same row names as the counts data
+res_df <- as.data.frame(res)
+
+# Add p-values, p-adjusted values, and log2 fold changes to the counts_df
+norm_obese_df$log2FoldChange <- res_df$log2FoldChange
+norm_obese_df$pvalue <- res_df$pvalue
+norm_obese_df$padj <- res_df$padj
+# Assuming df had the gene column in the first column
+norm_obese_df$gene <- df$Gene  # Add the gene column back to counts_df
+
+# Add a column to the data frame to specify if they are UP- or DOWN- regulated (log2fc respectively positive or negative)<br /><br /><br />
+norm_obese_df$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP"<br /><br /><br />
+norm_obese_df$diffexpressed[norm_obese_df$log2FoldChange > 0.58 & norm_obese_df$pvalue < 0.05] <- "UP"
+# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"<br /><br /><br />
+norm_obese_df$diffexpressed[norm_obese_df$log2FoldChange < -0.58 & norm_obese_df$pvalue < 0.05] <- "DOWN"
+# Explore a bit<br /><br /><br />
+```
+
+```{r, echo=FALSE}
+ggplot(data = norm_obese_df, aes(x = log2FoldChange, y = -log10(pvalue), col = diffexpressed)) +
+  geom_vline(xintercept = c(-0.58, 0.58), col = "gray", linetype = 'dashed') +
+  geom_hline(yintercept = -log10(0.05), col = "gray", linetype = 'dashed') +
+  geom_point() +
+  scale_color_manual(values = c("#00AFBB", "grey", "#bb0c00"),
+                     labels = c("Downregulated", "Not significant", "Upregulated")) +
+  coord_cartesian(ylim = c(0, 5), xlim = c(-4, 4)) + 
+  labs(color = 'DEG', 
+       x = expression("log"[2]*"FC"), y = expression("-log"[10]*"p-value (unadjusted)")) + 
+  scale_x_continuous(breaks = seq(-10, 14, 2)) + 
+  ggtitle('mRNA profiles in Healthy Fish Oil Participants at Week 0 and Week 12') +
+  theme_classic()
+
+# Filter for genes that meet both log2FoldChange and padj thresholds
+significant_genes <- norm_obese_df %>%
+  filter(abs(log2FoldChange) > 0.58 & pvalue < 0.05)
+
+# Now select the top 9 significant genes based on p-value
+top_genes <- significant_genes %>%
+  arrange(pvalue) %>%
+  slice_head(n = 10) %>%
+  dplyr::select(gene, diffexpressed)  # Keep more columns for clarity
+
+# Print the top significant genes
+print(top_genes)
+
+# Count the number of significant genes
+n_significant_genes <- nrow(significant_genes)
+print(paste("Number of significant genes:", n_significant_genes))
+```
+
+## After Normal Corn vs After Obese Corn
+
+```{r, echo=FALSE}
+df <- read_excel('Monday_ALL_combined.xlsx')
+df <- df |>
+  drop_na() |>
+  dplyr::select(`Gene`,`010_V4`,`015_V4`,`028_V4`,`040_V4`,`042_V4`,`063_V4`,`072_V4`,
+                `078_V4`,`085_V4`,`092_V4`)
+
+norm_obese_df <- df[, -1]
+# Convert the tibble to a regular data frame
+norm_obese_df <- as.data.frame(norm_obese_df)
+
+# Ensure the counts are integers (round if necessary)
+norm_obese_df <- as.data.frame(apply(norm_obese_df, 2, as.integer))
+
+# Define sample groups (e.g., "control" and "treated")
+condition <- c("healthy", "healthy", "healthy", "healthy", "healthy", "obese", "obese", "obese",
+               "obese", "obese")
+
+# Ensure this matches the order of columns in your counts dataframe
+colData <- data.frame(condition = factor(condition), row.names = colnames(norm_obese_df))
+
+dds <- DESeqDataSetFromMatrix(countData = norm_obese_df,
+                              colData = colData,
+                              design = ~ condition)  # The experimental design formula
+
+dds <- DESeq(dds)
+res <- results(dds)
+# Ensure the results have the same row names as the counts data
+res_df <- as.data.frame(res)
+
+# Add p-values, p-adjusted values, and log2 fold changes to the counts_df
+norm_obese_df$log2FoldChange <- res_df$log2FoldChange
+norm_obese_df$pvalue <- res_df$pvalue
+norm_obese_df$padj <- res_df$padj
+# Assuming df had the gene column in the first column
+norm_obese_df$gene <- df$Gene  # Add the gene column back to counts_df
+
+# Add a column to the data frame to specify if they are UP- or DOWN- regulated (log2fc respectively positive or negative)<br /><br /><br />
+norm_obese_df$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP"<br /><br /><br />
+norm_obese_df$diffexpressed[norm_obese_df$log2FoldChange > 1 & norm_obese_df$padj < 0.001] <- "UP"
+# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"<br /><br /><br />
+norm_obese_df$diffexpressed[norm_obese_df$log2FoldChange < -1 & norm_obese_df$padj < 0.001] <- "DOWN"
+# Explore a bit<br /><br /><br />
+```
+
+```{r, echo=FALSE}
+ggplot(data = norm_obese_df, aes(x = log2FoldChange, y = -log10(padj), col = diffexpressed)) +
+  geom_vline(xintercept = c(-1,1), col = "gray", linetype = 'dashed') +
+  geom_hline(yintercept = -log10(0.001), col = "gray", linetype = 'dashed') +
+  geom_point() +
+  scale_color_manual(values = c("#00AFBB", "grey", "#bb0c00"),
+                     labels = c("Downregulated", "Not significant", "Upregulated")) +
+  coord_cartesian(ylim = c(0, 300), xlim = c(-13, 13)) + 
+  labs(color = 'DEG', 
+       x = expression("log"[2]*"FC"), y = expression("-log"[10]*"p-value (adjusted)")) + 
+  scale_x_continuous(breaks = seq(-10, 14, 2)) + 
+  ggtitle('mRNA profiles in Healthy vs Obese Corn Oil Participants at Week 12') +
+  theme_classic()
+
+# Filter for genes that meet both log2FoldChange and padj thresholds
+significant_genes <- norm_obese_df %>%
+  filter(abs(log2FoldChange) > 1 & padj < 0.001)
+
+# Now select the top 9 significant genes based on p-value
+top_genes <- significant_genes %>%
+  arrange(pvalue) %>%
+  slice_head(n = 10) %>%
+  dplyr::select(gene, diffexpressed)  # Keep more columns for clarity
+
+# Print the top significant genes
+print(top_genes)
+
+# Count the number of significant genes
+n_significant_genes <- nrow(significant_genes)
+print(paste("Number of significant genes:", n_significant_genes))
+```
+
+## 
